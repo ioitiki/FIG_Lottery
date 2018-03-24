@@ -1,18 +1,17 @@
 pragma solidity ^0.4.18;
-pragma experimental ABIEncoderV2;
 
 library SafeMath {
     function mul(uint256 a, uint256 b) internal pure returns (uint256) {
         if (a == 0) {
-            return 0;
+          return 0;
         }
         uint256 c = a * b;
-        assert(c / a == b);
+        assert(c/a == b);
         return c;
     }
 
     function div(uint256 a, uint256 b) internal pure returns (uint256) {
-        uint256 c = a / b;
+        uint256 c = a/b;
         return c;
     }
 
@@ -44,20 +43,16 @@ contract ERC20 is ERC20Basic {
 
 contract BasicToken is ERC20Basic {
     using SafeMath for uint256;
-
     mapping(address => uint256) balances;
-
     uint256 totalSupply_;
 
     function totalSupply() public view returns (uint256) {
-        return totalSupply_;
+      return totalSupply_;
     }
 
     function transfer(address _to, uint256 _value) public returns (bool) {
         require(_to != address(0));
         require(_value <= balances[msg.sender]);
-
-        // SafeMath.sub will throw if there is not enough balance.
         balances[msg.sender] = balances[msg.sender].sub(_value);
         balances[_to] = balances[_to].add(_value);
         Transfer(msg.sender, _to, _value);
@@ -65,12 +60,11 @@ contract BasicToken is ERC20Basic {
     }
 
     function balanceOf(address _owner) public view returns (uint256 balance) {
-        return balances[_owner];
+      return balances[_owner];
     }
 }
 
 contract StandardToken is ERC20, BasicToken {
-
     mapping (address => mapping (address => uint256)) internal allowed;
 
     function transferFrom(address _from, address _to, uint256 _value) public returns (bool) {
@@ -92,7 +86,7 @@ contract StandardToken is ERC20, BasicToken {
     }
 
     function allowance(address _owner, address _spender) public view returns (uint256) {
-        return allowed[_owner][_spender];
+      return allowed[_owner][_spender];
     }
 
     function increaseApproval(address _spender, uint _addedValue) public returns (bool) {
@@ -115,12 +109,13 @@ contract StandardToken is ERC20, BasicToken {
 
 contract FigToken is StandardToken {
 
+    // constants
     string public constant name = "FigToken";
     string public constant symbol = "FIG";
     uint8 public constant decimals = 2;
-
     uint public constant INITIAL_SUPPLY = 2000000;
 
+    // constructor
     function FigToken() public {
         totalSupply_ = INITIAL_SUPPLY;
         balances[msg.sender] = INITIAL_SUPPLY;
@@ -128,82 +123,76 @@ contract FigToken is StandardToken {
         wallets[msg.sender] = Wallet(INITIAL_SUPPLY, "admin");
     }
 
+    //
     struct Wallet {
         uint balance;
         string name;
     }
-    mapping(address => Wallet) public wallets;
-
     struct Bet {
+        int id;
         uint value;
         uint24 numbers;
-        uint24 drawingHash;
         uint blockNum;
-        uint score;
+        uint24 drawingHash;
         uint winnings;
-
     }
 
-    mapping(address => Bet) public bets;
+    mapping(address => Wallet) public wallets;
+    mapping(address => mapping(int => Bet)) public bets;
+    mapping(address => int) public playerbets;
 
     function bet(uint _value, uint _numbers) public {
-        uint256 _blockHash = uint256(block.blockhash(block.number - 1));
+        playerbets[msg.sender] ++;
 
-        if(((_blockHash % 100000000) / 1000000) % 10 == 0) {
-            uint24 _drawingHash = uint24(_blockHash % 10000000) + 5000000;
-            bets[msg.sender] = Bet({
-              value: _value,
-              numbers: uint24(_numbers),
-              drawingHash: _drawingHash,
-              blockNum: uint(block.number),
-              score: 0,
-              winnings: 0
-            });
-        } else {
-            bets[msg.sender] = Bet({
-              value: _value,
-              numbers: uint24(_numbers),
-              drawingHash: uint24(_blockHash % 10000000),
-              blockNum: uint(block.number),
-              score: 0,
-              winnings: 0
-            });
-        };
+        bets[msg.sender][playerbets[msg.sender]] = Bet({
+            id: playerbets[msg.sender],
+            value: _value,
+            numbers: uint24(_numbers),
+            blockNum: uint(block.number),
+            drawingHash: 0,
+            winnings: 0
+        });
+
         wallets[msg.sender].balance -= _value;
+
     }
 
-    function payout(uint24 _numbers, uint24 _drawingHash) public {
+
+    function checkWin(uint24 _numbers, uint24 _drawingHash) pure private returns (uint) {
         uint24 matches =
-            (((_numbers % 10) % 5) - ((_drawingHash % 10) % 5) == 0 ? 1 : 0 ) +
-            ((((_numbers / 10) % 10) % 5) - (((_drawingHash / 10) % 10) % 5) == 0 ? 1 : 0 ) +
-            ((((_numbers / 100) % 10) % 5) - (((_drawingHash / 100) % 10) % 5) == 0 ? 1 : 0 ) +
-            ((((_numbers / 1000) % 10) % 5) - (((_drawingHash / 1000) % 10) % 5) == 0 ? 1 : 0 ) +
-            ((((_numbers / 10000) % 10) % 5) - (((_drawingHash / 10000) % 10) % 5) == 0 ? 1 : 0 ) +
-            ((((_numbers / 100000) % 10) % 5) - (((_drawingHash / 100000) % 10) % 5) == 0 ? 1 : 0 ) +
-            (((_numbers / 1000000) % 5) - ((_drawingHash / 1000000) % 5) == 0 ? 1 : 0 );
+          (((_numbers % 10) % 5) - ((_drawingHash % 10) % 5) == 0 ? 1 : 0 ) +
+          ((((_numbers / 10) % 10) % 5) - (((_drawingHash / 10) % 10) % 5) == 0 ? 1 : 0 ) +
+          ((((_numbers / 100) % 10) % 5) - (((_drawingHash / 100) % 10) % 5) == 0 ? 1 : 0 ) +
+          ((((_numbers / 1000) % 10) % 5) - (((_drawingHash / 1000) % 10) % 5) == 0 ? 1 : 0 ) +
+          ((((_numbers / 10000) % 10) % 5) - (((_drawingHash / 10000) % 10) % 5) == 0 ? 1 : 0 ) +
+          ((((_numbers / 100000) % 10) % 5) - (((_drawingHash / 100000) % 10) % 5) == 0 ? 1 : 0 ) +
+          (((_numbers / 1000000) % 5) - ((_drawingHash / 1000000) % 5) == 0 ? 1 : 0 );
 
-        bets[msg.sender].score = matches;
+        if(matches == 2) {return (3);}
+        if(matches == 3) {return (8);}
+        if(matches == 4) {return (34);}
+        if(matches == 5) {return (232);}
+        if(matches == 6) {return (2790);}
+        if(matches == 7) {return (78125);}
+        return (0);
+    }
 
-        if(matches == 2) {
-            bets[msg.sender].winnings = bets[msg.sender].value * 3;
-        }
-        if(matches == 3) {
-            bets[msg.sender].winnings = bets[msg.sender].value * 8;
-        }
-        if(matches == 4) {
-            bets[msg.sender].winnings = bets[msg.sender].value * 34;
-        }
-        if(matches == 5) {
-            bets[msg.sender].winnings = bets[msg.sender].value * 232;
-        }
-        if(matches == 6) {
-            bets[msg.sender].winnings = bets[msg.sender].value * 2790;
-        }
-        if(matches == 7) {
-            bets[msg.sender].winnings = bets[msg.sender].value * 78125;
-        }
+    function won(address _who) public {
+        for(uint8 i = 1; i <= playerbets[_who]; i++) {
+            Bet memory player = bets[_who][i];
+            uint256 blockHash = uint256(block.blockhash(player.blockNum + 1));
 
-        wallets[msg.sender].balance += (bets[msg.sender].winnings + bets[msg.sender].value);
+            // make sure the first digit for comparison isn't a 0.
+            uint24 drawingHash =
+              ((blockHash % 100000000) / 1000000) % 10 == 0 ?
+              uint24(blockHash % 10000000) + 5000000 :
+              uint24(blockHash % 10000000);
 
+            uint winnings = checkWin(player.numbers, drawingHash) * player.value;
+
+            bets[_who][i].winnings = winnings;
+            bets[_who][i].drawingHash = drawingHash;
+            wallets[_who].balance += winnings;
+        }
     }
 }

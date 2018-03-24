@@ -1,68 +1,101 @@
-App = {
-  web3Provider: null,
-  contracts: {},
+import React from 'react';
+import ReactDOM from 'react-dom';
+import Web3 from 'web3';
+import TruffleContract from 'truffle-contract';
+import FigToken from '../../build/contracts/FigToken.json';
+import 'bootstrap/dist/css/bootstrap.css';
 
-  init: function() {
-    // Load pets.
-    $.getJSON('../pets.json', function(data) {
-      var petsRow = $('#petsRow');
-      var petTemplate = $('#petTemplate');
+class App extends React.Component {
+  constructor(props) {
+    super(props)
+    this.state = {
+      account: '0x0',
+      bets: [],
+      hasBet: false,
+      loading: true,
+      betting: false,
+    };
 
-      for (i = 0; i < data.length; i ++) {
-        petTemplate.find('.panel-title').text(data[i].name);
-        petTemplate.find('img').attr('src', data[i].picture);
-        petTemplate.find('.pet-breed').text(data[i].breed);
-        petTemplate.find('.pet-age').text(data[i].age);
-        petTemplate.find('.pet-location').text(data[i].location);
-        petTemplate.find('.btn-adopt').attr('data-id', data[i].id);
+    if (typeof web3 != 'undefined') {
+      this.web3Provider = web3.currentProvider;
+    } else {
+      this.web3Provider = new Web3.providers.HttpProvider('http://localhost:7545');
+    };
 
-        petsRow.append(petTemplate.html());
-      }
-    });
+    this.web3 = new Web3(this.web3Provider);
 
-    return App.initWeb3();
-  },
+    this.fig = TruffleContract(FigToken);
+    this.fig.setProvider(this.web3Provider);
 
-  initWeb3: function() {
-    /*
-     * Replace me...
-     */
+    this.bet = this.bet.bind(this);
+    this.watchEvents = this.watchEvents.bind(this);
+  };
 
-    return App.initContract();
-  },
+  componentDidMount() {
+    // TODO: Refactor with promise chain
+    this.web3.eth.getCoinbase((err, account) => {
+      this.setState({ account })
+      this.fig.deployed().then((figInstance) => {
+        this.figInstance = figInstance
+        this.watchEvents()
+        this.figInstance.betsCount().then((betsCount) => {
+          for (var i = 1; i <= betsCount; i++) {
+            this.figInstance.bets(i).then((bet) => {
+              const bets = [...this.state.bets]
+              bets.push({
+                id: bet[0],
+                name: bet[1],
+                voteCount: bet[2]
+              });
+              this.setState({ bets: bets })
+            });
+          }
+        })
+        this.figInstance.voters(this.state.account).then((hasVoted) => {
+          this.setState({ hasVoted, loading: false })
+        })
+      })
+    })
+  };
 
-  initContract: function() {
-    /*
-     * Replace me...
-     */
-
-    return App.bindEvents();
-  },
-
-  bindEvents: function() {
-    $(document).on('click', '.btn-adopt', App.handleAdopt);
-  },
-
-  markAdopted: function(adopters, account) {
-    /*
-     * Replace me...
-     */
-  },
-
-  handleAdopt: function(event) {
-    event.preventDefault();
-
-    var petId = parseInt($(event.target).data('id'));
-
-    /*
-     * Replace me...
-     */
+  watchEvents() {
+    // TODO: trigger event when vote is counted, not when component renders
+    this.figInstance.votedEvent({}, {
+      fromBlock: 0,
+      toBlock: 'latest'
+    }).watch((error, event) => {
+      this.setState({ voting: false })
+    })
   }
 
+  bet(betId) {
+    this.setState({ voting: true })
+    this.figInstance.vote(betId, { from: this.state.account }).then((result) =>
+      this.setState({ hasVoted: true })
+    )
+  };
+
+  render() {
+    return (
+      <div class='row'>
+        <div class='col-lg-12 text-center' >
+          <h1>Election Results</h1>
+          <br/>
+          { this.state.loading || this.state.voting
+            ? <p class='text-center'>Loading...</p>
+            : <Content
+                account={this.state.account}
+                bets={this.state.bets}
+                hasVoted={this.state.hasVoted}
+                bet={this.bet} />
+          }
+        </div>
+      </div>
+    )
+  }
 };
 
-$(function() {
-  $(window).load(function() {
-    App.init();
-  });
-});
+ReactDOM.render(
+   <App />,
+   document.querySelector('#root')
+);
